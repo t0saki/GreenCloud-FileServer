@@ -57,8 +57,12 @@ func (h *FileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Use singleflight to prevent cache stampedes
 	val, err, _ := h.sfGroup.Do(filePath, func() (interface{}, error) {
-		// Singleflight execution
-		return h.readHedged(r.Context(), filePath)
+		// Singleflight execution: Detach context from the original request
+		// to ensure the read is completed and cached even if the first caller disconnects.
+		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		
+		return h.readHedged(bgCtx, filePath)
 	})
 
 	if err != nil {
